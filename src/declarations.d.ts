@@ -1,1 +1,1 @@
-declare module "react-native-fs";
+declare module "rn-fetch-blob";
