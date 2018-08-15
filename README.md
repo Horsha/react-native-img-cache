@@ -34,7 +34,7 @@ The `CachedImage` component assumes that the image URI will never change. The im
 * The `body` property in `source` is not supported. Please file an issue if that's something you would like to see supported.
 
 ```jsx
-import {CachedImage} from "react-native-img-cache";
+import { CachedImage } from 'react-native-img-cache'
 
 <CachedImage source={{ uri: "https://i.ytimg.com/vi/yaqe1qesQ8c/maxresdefault.jpg" }} />
 ```
@@ -42,7 +42,7 @@ import {CachedImage} from "react-native-img-cache";
 The `mutable` property implies assumes that the image URI can change over time. The lifetime of this cache is the one of the running application and it can be manually busted using `ImageCache`.
 
 ```jsx
-import {CachedImage} from "react-native-img-cache";
+import { CachedImage } from 'react-native-img-cache'
 
 <CachedImage source={{ uri: "https://i.ytimg.com/vi/yaqe1qesQ8c/maxresdefault.jpg" }} mutable />
 ```
@@ -53,10 +53,10 @@ By default, the `CachedImage` component is using the [standard RN Image componen
 It is possible however to use a different component via `CustomCachedImage`. In the example below, we use the `Image` component from [react-native-image-progress](https://github.com/oblador/react-native-image-progress).
 
 ```jsx
-import {CustomCachedImage} from "react-native-img-cache";
+import { CachedImage } from 'react-native-img-cache'
 
-import Image from 'react-native-image-progress';
-import ProgressBar from 'react-native-progress/Bar';
+import Image from 'react-native-image-progress'
+import ProgressBar from 'react-native-progress/Bar'
 
 <CustomCachedImage
   component={Image}
