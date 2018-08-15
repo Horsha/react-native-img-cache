@@ -1,6 +1,6 @@
 {
   "name": "react-native-img-cache",
-  "version": "0.0.2-development",
+  "version": "0.0.3-development",
   "description": "CachedImage component for React native",
   "main": "build/index.js",
   "typings": "build/index.d.ts",
@@ -39,7 +39,8 @@
     "typescript": "^3.0.1"
   },
   "dependencies": {
-    "crypto-js": "^3.1.9-1"
+    "crypto-js": "^3.1.9-1",
+    "react-native-fs": "^2.9.12"
   },
   "release": {
     "verifyConditions": "condition-circle"

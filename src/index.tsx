@@ -1,25 +1,25 @@
 import React, {Component} from "react";
 import {Image, ImageBackground, ImageProperties, ImageURISource, Platform} from "react-native";
-import RNFetchBlob from "rn-fetch-blob";
+import fs from "react-native-fs";
 const SHA1 = require("crypto-js/sha1");
 
 const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
-const BASE_DIR = RNFetchBlob.fs.dirs.CacheDir + "/react-native-img-cache";
-const FILE_PREFIX = Platform.OS === "ios" ? "" : "file://";
-export type CacheHandler = (path: string) => void;
+const BASE_DIR = fs.CachesDirectoryPath + "/react-native-img-cache";
+const FILE_PREFIX = Platform.OS === "ios" ? "file://" : "";
 
 export interface CachedImageURISource extends ImageURISource {
     uri: string;
 }
 
-type CacheEntry = {
+export type CacheEntry = {
     source: CachedImageURISource;
-    downloading: boolean;
     handlers: CacheHandler[];
     path: string | undefined;
     immutable: boolean;
     task?: any;
 };
+
+export type CacheHandler = (path: string, entry: CacheEntry) => void;
 
 export class ImageCache {
 
@@ -36,7 +36,13 @@ export class ImageCache {
 
     private static instance: ImageCache;
 
-    private constructor() {}
+    private constructor() { 
+        fs.exists(BASE_DIR).then((exists: boolean) => {
+            if (!exists) {
+                fs.mkdir(BASE_DIR);
+            }
+        });
+    }
 
     static get(): ImageCache {
         if (!ImageCache.instance) {
@@ -49,7 +55,7 @@ export class ImageCache {
 
     clear() {
         this.cache = {};
-        return RNFetchBlob.fs.unlink(BASE_DIR);
+        return fs.unlink(BASE_DIR);
     }
 
     on(source: CachedImageURISource, handler: CacheHandler, immutable?: boolean) {
@@ -57,10 +63,9 @@ export class ImageCache {
         if (!this.cache[uri]) {
             this.cache[uri] = {
                 source,
-                downloading: false,
                 handlers: [handler],
                 immutable: immutable === true,
-                path: immutable === true ? this.getPath(uri, immutable) : undefined
+                path: undefined
             };
         } else {
             this.cache[uri].handlers.push(handler);
@@ -89,27 +94,32 @@ export class ImageCache {
 
     cancel(uri: string) {
         const cache = this.cache[uri];
-        if (cache && cache.downloading) {
-            cache.task.cancel();
+        if (cache && cache.task) {
+            fs.stopDownload(cache.task.jobId);
         }
     }
 
     private download(cache: CacheEntry) {
         const {source} = cache;
         const {uri} = source;
-        if (!cache.downloading) {
+        if (!cache.task) {
             const path = this.getPath(uri, cache.immutable);
-            cache.downloading = true;
             const method = source.method ? source.method : "GET";
-            cache.task = RNFetchBlob.config({ path }).fetch(method, uri, source.headers);
-            cache.task.then(() => {
-                cache.downloading = false;
+            (cache.task = fs.downloadFile({
+                fromUrl: uri,
+                toFile: path,
+                headers: {
+                    method,
+                    ...(source.headers || {})
+                }
+            })).promise.then(() => {
+                cache.task = null;
                 cache.path = path;
-                this.notify(uri);
+                this.notify(uri, cache);
             }).catch(() => {
-                cache.downloading = false;
+                cache.task = null;
                 // Parts of the image may have been downloaded already, (see https://github.com/wkh237/react-native-fetch-blob/issues/331)
-                RNFetchBlob.fs.unlink(path);
+                fs.unlink(path);
             });
         }
     }
@@ -118,9 +128,9 @@ export class ImageCache {
         const cache = this.cache[uri];
         if (cache.path) {
             // We check here if IOS didn't delete the cache content
-            RNFetchBlob.fs.exists(cache.path).then((exists: boolean) => {
+            fs.exists(cache.path).then((exists: boolean) => {
                 if (exists) {
-                    this.notify(uri);
+                    this.notify(uri, cache);
                 } else {
                     this.download(cache);
                 }
@@ -131,10 +141,10 @@ export class ImageCache {
 
     }
 
-    private notify(uri: string) {
+    private notify(uri: string, entry: CacheEntry) {
         const handlers = this.cache[uri].handlers;
         handlers.forEach(handler => {
-            handler(this.cache[uri].path as string);
+            handler(this.cache[uri].path as string, entry);
         });
     }
 }
@@ -156,7 +166,7 @@ export abstract class BaseCachedImage<P extends CachedImageProps> extends Compon
 
     private uri: string;
 
-    private handler: CacheHandler = (path: string) => {
+    private handler: CacheHandler = (path: string, ) => {
         this.setState({ path });
     }
 

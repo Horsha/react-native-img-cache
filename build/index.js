@@ -26,14 +26,19 @@ var __assign = (this && this.__assign) || function () {
 exports.__esModule = true;
 var react_1 = require("react");
 var react_native_1 = require("react-native");
-var rn_fetch_blob_1 = require("rn-fetch-blob");
+var react_native_fs_1 = require("react-native-fs");
 var SHA1 = require("crypto-js/sha1");
 var s4 = function () { return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1); };
-var BASE_DIR = rn_fetch_blob_1["default"].fs.dirs.CacheDir + "/react-native-img-cache";
-var FILE_PREFIX = react_native_1.Platform.OS === "ios" ? "" : "file://";
+var BASE_DIR = react_native_fs_1["default"].CachesDirectoryPath + "/react-native-img-cache";
+var FILE_PREFIX = react_native_1.Platform.OS === "ios" ? "file://" : "";
 var ImageCache = /** @class */ (function () {
     function ImageCache() {
         this.cache = {};
+        react_native_fs_1["default"].exists(BASE_DIR).then(function (exists) {
+            if (!exists) {
+                react_native_fs_1["default"].mkdir(BASE_DIR);
+            }
+        });
     }
     ImageCache.prototype.getPath = function (uri, immutable) {
         var path = uri.substring(uri.lastIndexOf("/"));
@@ -54,17 +59,16 @@ var ImageCache = /** @class */ (function () {
     };
     ImageCache.prototype.clear = function () {
         this.cache = {};
-        return rn_fetch_blob_1["default"].fs.unlink(BASE_DIR);
+        return react_native_fs_1["default"].unlink(BASE_DIR);
     };
     ImageCache.prototype.on = function (source, handler, immutable) {
         var uri = source.uri;
         if (!this.cache[uri]) {
             this.cache[uri] = {
                 source: source,
-                downloading: false,
                 handlers: [handler],
                 immutable: immutable === true,
-                path: immutable === true ? this.getPath(uri, immutable) : undefined
+                path: undefined
             };
         }
         else {
@@ -91,27 +95,29 @@ var ImageCache = /** @class */ (function () {
     };
     ImageCache.prototype.cancel = function (uri) {
         var cache = this.cache[uri];
-        if (cache && cache.downloading) {
-            cache.task.cancel();
+        if (cache && cache.task) {
+            react_native_fs_1["default"].stopDownload(cache.task.jobId);
         }
     };
     ImageCache.prototype.download = function (cache) {
         var _this = this;
         var source = cache.source;
         var uri = source.uri;
-        if (!cache.downloading) {
+        if (!cache.task) {
             var path_1 = this.getPath(uri, cache.immutable);
-            cache.downloading = true;
             var method = source.method ? source.method : "GET";
-            cache.task = rn_fetch_blob_1["default"].config({ path: path_1 }).fetch(method, uri, source.headers);
-            cache.task.then(function () {
-                cache.downloading = false;
+            (cache.task = react_native_fs_1["default"].downloadFile({
+                fromUrl: uri,
+                toFile: path_1,
+                headers: __assign({ method: method }, (source.headers || {}))
+            })).promise.then(function () {
+                cache.task = null;
                 cache.path = path_1;
-                _this.notify(uri);
+                _this.notify(uri, cache);
             })["catch"](function () {
-                cache.downloading = false;
+                cache.task = null;
                 // Parts of the image may have been downloaded already, (see https://github.com/wkh237/react-native-fetch-blob/issues/331)
-                rn_fetch_blob_1["default"].fs.unlink(path_1);
+                react_native_fs_1["default"].unlink(path_1);
             });
         }
     };
@@ -120,9 +126,9 @@ var ImageCache = /** @class */ (function () {
         var cache = this.cache[uri];
         if (cache.path) {
             // We check here if IOS didn't delete the cache content
-            rn_fetch_blob_1["default"].fs.exists(cache.path).then(function (exists) {
+            react_native_fs_1["default"].exists(cache.path).then(function (exists) {
                 if (exists) {
-                    _this.notify(uri);
+                    _this.notify(uri, cache);
                 }
                 else {
                     _this.download(cache);
@@ -133,11 +139,11 @@ var ImageCache = /** @class */ (function () {
             this.download(cache);
         }
     };
-    ImageCache.prototype.notify = function (uri) {
+    ImageCache.prototype.notify = function (uri, entry) {
         var _this = this;
         var handlers = this.cache[uri].handlers;
         handlers.forEach(function (handler) {
-            handler(_this.cache[uri].path);
+            handler(_this.cache[uri].path, entry);
         });
     };
     return ImageCache;

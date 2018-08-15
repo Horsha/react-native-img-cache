@@ -1,9 +1,16 @@
 import { Component } from "react";
 import { ImageProperties, ImageURISource } from "react-native";
-export declare type CacheHandler = (path: string) => void;
 export interface CachedImageURISource extends ImageURISource {
     uri: string;
 }
+export declare type CacheEntry = {
+    source: CachedImageURISource;
+    handlers: CacheHandler[];
+    path: string | undefined;
+    immutable: boolean;
+    task?: any;
+};
+export declare type CacheHandler = (path: string, entry: CacheEntry) => void;
 export declare class ImageCache {
     private getPath;
     private static instance;
